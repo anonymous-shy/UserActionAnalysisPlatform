@@ -11,11 +11,18 @@ import java.sql.SQLException;
  */
 public class TaskDaoImpl extends JDBCDAOImpl<Task> implements ITaskDao {
 
-    TaskDaoImpl taskDao = new TaskDaoImpl();
-
-    public Task findById(Long taskId) throws SQLException {
+    public Task findById(Long taskId) {
         String sql = "select * from task where task_id = ?";
-            Task task = taskDao.get(JDBCUtils.getConnection(), sql, taskId);
+            Task task = super.get(JDBCUtils.getConnection(), sql, taskId);
+            System.out.println(task);
+            System.out.println("=================================");
             return task;
+
+    }
+
+    public Task findByName(String taskName) {
+        String sql = "select * from task where task_name = ?";
+        Task task = get(JDBCUtils.getConnection(), sql, taskName);
+        return task;
     }
 }

@@ -1,8 +1,11 @@
 package shy.sparkproject;
 
 import shy.sparkproject.conf.ConfigurationManager;
+import shy.sparkproject.dao.ITaskDao;
 import shy.sparkproject.dao.factory.DaoFactory;
 import shy.sparkproject.dao.impl.JDBCDAOImpl;
+import shy.sparkproject.dao.impl.TaskDaoImpl;
+import shy.sparkproject.domain.Task;
 import shy.sparkproject.utils.JDBCUtils;
 
 import java.sql.Connection;
@@ -24,12 +27,10 @@ public class Test {
 
     @org.junit.Test
     public void testJdbsUtils() {
-        try {
-            Connection connection = JDBCUtils.getConnection();
-            System.out.print(connection);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+
+        Connection connection = JDBCUtils.getConnection();
+        System.out.print(connection);
+
     }
 
     @org.junit.Test
@@ -37,11 +38,18 @@ public class Test {
         Connection connection = JDBCUtils.getConnection();
 //        String sql = "select * from world.country where code = ?";
         String sql = "select * from task where task_id = ?";
-        new JDBCDAOImpl().get(connection, sql, 1);
+//        new JDBCDAOImpl().get(connection, sql, 1);
+        JDBCDAOImpl<Task> taskJDBCDAO = new JDBCDAOImpl<Task>();
+        Task task = taskJDBCDAO.get(connection, sql, 1);
+        System.out.print(task.getTaskId() + " : " + task.getTaskName());
     }
 
     @org.junit.Test
     public void testDao() throws SQLException {
-        System.out.print(DaoFactory.getTaskDao().findById(1L));
+//        Task task = DaoFactory.getTaskDao().findByName("Test");
+        ITaskDao taskDao = new TaskDaoImpl();
+        Task task = taskDao.findByName("Test");
+        System.out.print(task.getTaskId() + " : " + task.getTaskName());
     }
+
 }

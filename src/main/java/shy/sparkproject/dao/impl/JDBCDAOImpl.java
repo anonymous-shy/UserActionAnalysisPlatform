@@ -29,8 +29,13 @@ public class JDBCDAOImpl<T> implements IQueryDao<T> {
         queryRunner.update(connection, sql, args);
     }
 
-    public T get(Connection connection, String sql, Object... args) throws SQLException {
-        return queryRunner.query(connection, sql, new BeanHandler<T>(type), args);
+    public T get(Connection connection, String sql, Object... args) {
+        try {
+            return queryRunner.query(connection, sql, new BeanHandler<T>(type), args);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public List getList(Connection connection, String sql, Object... args) throws SQLException {

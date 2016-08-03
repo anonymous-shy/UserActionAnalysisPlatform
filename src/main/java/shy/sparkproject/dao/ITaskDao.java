@@ -15,5 +15,7 @@ public interface ITaskDao {
      * @param taskId
      * @return Task
      */
-    Task findById(Long taskId) throws SQLException;
+    Task findById(Long taskId);
+
+    Task findByName(String taskName);
 }

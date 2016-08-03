@@ -79,4 +79,6 @@ public class Task implements Serializable{
     public void setTaskParam(String taskParam) {
         this.taskParam = taskParam;
     }
+
+
 }

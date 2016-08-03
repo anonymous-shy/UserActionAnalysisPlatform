@@ -20,8 +20,13 @@ public class JDBCUtils {
         dataSource = new ComboPooledDataSource("c3p0");
     }
 
-    public static Connection getConnection() throws SQLException {
-        return dataSource.getConnection();
+    public static Connection getConnection() {
+        try {
+            return dataSource.getConnection();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public static void releaseDB(ResultSet resultSet, Statement statement,
