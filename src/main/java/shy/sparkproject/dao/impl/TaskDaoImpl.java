@@ -14,7 +14,7 @@ public class TaskDaoImpl extends JDBCDAOImpl<Task> implements ITaskDao {
     TaskDaoImpl taskDao = new TaskDaoImpl();
 
     public Task findById(Long taskId) throws SQLException {
-        String sql = "select * from task where taskid = ?";
+        String sql = "select * from task where task_id = ?";
             Task task = taskDao.get(JDBCUtils.getConnection(), sql, taskId);
             return task;
     }

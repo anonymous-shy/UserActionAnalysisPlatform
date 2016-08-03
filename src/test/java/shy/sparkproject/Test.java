@@ -1,6 +1,7 @@
 package shy.sparkproject;
 
 import shy.sparkproject.conf.ConfigurationManager;
+import shy.sparkproject.dao.factory.DaoFactory;
 import shy.sparkproject.dao.impl.JDBCDAOImpl;
 import shy.sparkproject.utils.JDBCUtils;
 
@@ -15,7 +16,6 @@ public class Test {
 
     @org.junit.Test
     public void testConf() {
-
         ConfigurationManager cm = new ConfigurationManager();
         System.out.println(cm.getProperty("simple-app.answer"));
         System.out.println(cm.getProperty("simple-lib.foo"));
@@ -34,16 +34,14 @@ public class Test {
 
     @org.junit.Test
     public void testJDBC() throws SQLException {
-
         Connection connection = JDBCUtils.getConnection();
-        /*String sql = "select * from emp where empno = ?";
-        Emp query = queryRunner.query(connection, sql, new BeanHandler<Emp>(Emp.class), 7839);
-        System.out.print(query);*/
+//        String sql = "select * from world.country where code = ?";
+        String sql = "select * from task where task_id = ?";
+        new JDBCDAOImpl().get(connection, sql, 1);
+    }
 
-        String sql = "select * from emp";
-        List list = new JDBCDAOImpl().getList(connection, sql);
-        System.out.print(list);
-//        String sql = "insert into dept values(?,?,?)";
-//        new JDBCDAOImpl().update(connection, sql, 50, "test", "test");
+    @org.junit.Test
+    public void testDao() throws SQLException {
+        System.out.print(DaoFactory.getTaskDao().findById(1L));
     }
 }

@@ -8,6 +8,8 @@ import com.typesafe.config.*;
  * also default to ConfigFactory.load if they don't supply one.
  * Libraries generally have some kind of Context or other object
  * where it's convenient to place the configuration.
+ * https://github.com/typesafehub/config/tree/master/examples
+ * https://github.com/typesafehub/config
  * <p>
  * Created by Shy on 2016/6/29.
  */
