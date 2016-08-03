@@ -2,6 +2,7 @@ package shy.sparkproject.utils;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import shy.sparkproject.conf.ConfigurationManager;
 
 /**
  * 参数工具类
@@ -19,21 +20,21 @@ public class ParamUtils {
      * @return 任务id
      */
 
-//    public static Long getTaskIdFromArgs(String[] args, String taskType) {
-//        boolean local = ConfigurationManager.getBoolean(Constants.SPARK_LOCAL);
-//        if (local) {
-//            return ConfigurationManager.getLong(taskType);
-//        } else {
-//            try {
-//                if (args != null && args.length > 0) {
-//                    return Long.valueOf(args[0]);
-//                }
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//            }
-//        }
-//        return null;
-//    }
+/*    public static Long getTaskIdFromArgs(String[] args, String taskType) {
+        boolean local = ConfigurationManager.getBoolean(Constants.SPARK_LOCAL);
+        if (local) {
+            return ConfigurationManager.getLong(taskType);
+        } else {
+            try {
+                if (args != null && args.length > 0) {
+                    return Long.valueOf(args[0]);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
+    }*/
 
     /**
      * 从JSON对象中提取参数
