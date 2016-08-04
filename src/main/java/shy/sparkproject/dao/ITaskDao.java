@@ -15,7 +15,6 @@ public interface ITaskDao {
      * @param taskId
      * @return Task
      */
-    Task findById(Long taskId);
+    Task findById(Integer taskId);
 
-    Task findByName(String taskName);
 }

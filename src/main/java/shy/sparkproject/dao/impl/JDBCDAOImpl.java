@@ -25,8 +25,12 @@ public class JDBCDAOImpl<T> implements IQueryDao<T> {
         type = ReflectionUtils.getSuperGenericType(getClass());
     }
 
-    public void update(Connection connection, String sql, Object... args) throws SQLException {
-        queryRunner.update(connection, sql, args);
+    public void update(Connection connection, String sql, Object... args) {
+        try {
+            queryRunner.update(connection, sql, args);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public T get(Connection connection, String sql, Object... args) {
@@ -38,8 +42,13 @@ public class JDBCDAOImpl<T> implements IQueryDao<T> {
         return null;
     }
 
-    public List getList(Connection connection, String sql, Object... args) throws SQLException {
-        return queryRunner.query(connection, sql, new BeanListHandler<T>(type), args);
+    public List getList(Connection connection, String sql, Object... args) {
+        try {
+            return queryRunner.query(connection, sql, new BeanListHandler<T>(type), args);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public void batch(Connection connection, String sql, Object[]... args) throws SQLException {
