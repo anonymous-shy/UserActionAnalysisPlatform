@@ -1,5 +1,7 @@
 package shy.sparkproject;
 
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import shy.sparkproject.conf.ConfigurationManager;
 import shy.sparkproject.dao.factory.DaoFactory;
 import shy.sparkproject.domain.Task;
@@ -14,9 +16,15 @@ public class Test {
     @org.junit.Test
     public void testConf() {
         ConfigurationManager cm = new ConfigurationManager();
-        System.out.println(cm.getProperty("simple-app.answer"));
-        System.out.println(cm.getProperty("simple-lib.foo"));
-        System.out.println(cm.getProperty("simple-lib.whatever"));
+        if (cm.getProperty("spark-ctx.local") == "true")
+            System.out.println(cm.getProperty("spark-app.SESSION_AppName"));
+    }
+
+    @org.junit.Test
+    public void testFastJSON() {
+        String json = "{\"time\":\"2015-09-12T00:46:58.771Z\",\"channel\":\"#en.wikipedia\",\"cityName\":null,\"comment\":\"added project\",\"countryIsoCode\":null,\"countryName\":null,\"isAnonymous\":false,\"isMinor\":false,\"isNew\":false,\"isRobot\":false,\"isUnpatrolled\":false,\"metroCode\":null,\"namespace\":\"Talk\",\"page\":\"Talk:Oswald Tilghman\",\"regionIsoCode\":null,\"regionName\":null,\"user\":\"GELongstreet\",\"delta\":36,\"added\":36,\"deleted\":0}";
+        JSONObject jsonObject = JSONArray.parseObject(json);
+        System.out.println(jsonObject.getString("time"));
     }
 
     @org.junit.Test

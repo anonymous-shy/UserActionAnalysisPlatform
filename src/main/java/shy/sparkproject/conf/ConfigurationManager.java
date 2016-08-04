@@ -25,7 +25,7 @@ public class ConfigurationManager {
         // path so we only validate settings that belong to this
         // library. Otherwise, we might throw mistaken errors about
         // settings we know nothing about.
-        config.checkValid(ConfigFactory.defaultReference(), "simple-lib");
+        config.checkValid(ConfigFactory.defaultReference(), "spark-ctx");
     }
 
     // This uses the standard default Config, if none is provided,
