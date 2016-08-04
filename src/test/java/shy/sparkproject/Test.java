@@ -16,7 +16,8 @@ public class Test {
     @org.junit.Test
     public void testConf() {
         ConfigurationManager cm = new ConfigurationManager();
-        if (cm.getProperty("spark-ctx.local") == "true")
+        System.out.println(cm.getProperty("spark-ctx.master"));
+        if (cm.getProperty("spark-ctx.master").equals("local"))
             System.out.println(cm.getProperty("spark-app.SESSION_AppName"));
     }
 

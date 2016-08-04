@@ -6,6 +6,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.hive.HiveContext;
 import shy.sparkproject.conf.ConfigurationManager;
+import shy.sparkproject.utils.MockData;
 
 /**
  * 用户访问session分析
@@ -17,9 +18,11 @@ public class UserSessionAnalysis {
         ConfigurationManager cm = new ConfigurationManager();
         SparkConf conf = new SparkConf()
                 .setAppName(cm.getProperty("spark-app.SESSION_AppName"))
-                .setMaster(cm.getProperty("spark-ctx.local"));
+                .setMaster(cm.getProperty("spark-ctx.master"));
         JavaSparkContext sc = new JavaSparkContext(conf);
-        SQLContext sqlContext = getSQLContext(sc.sc(), cm.getProperty("spark-ctx.local"));
+        SQLContext sqlContext = getSQLContext(sc.sc(), cm.getProperty("spark-ctx.master"));
+
+        mockData(sc, sqlContext, cm.getProperty("spark-ctx.master"));
 
         sc.close();
     }
@@ -33,8 +36,14 @@ public class UserSessionAnalysis {
      * @return SQLContext
      */
     private static SQLContext getSQLContext(SparkContext sc, String mode) {
-        if (mode == "local")
+        if ("local".equals(mode))
             return new SQLContext(sc);
         else return new HiveContext(sc);
+    }
+
+    private static void mockData(JavaSparkContext sc, SQLContext sqlContext, String mode) {
+        if ("local".equals(mode)) {
+            MockData.mock(sc, sqlContext);
+        }
     }
 }
