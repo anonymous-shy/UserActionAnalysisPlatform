@@ -56,15 +56,15 @@ public class MockData {
 					String payProductIds = null;
 					
 					String action = actions[random.nextInt(4)];
-					if("search".equals(action)) {
+					if("Search".equals(action)) {
 						searchKeyword = searchKeywords[random.nextInt(10)];   
-					} else if("click".equals(action)) {
+					} else if("Click".equals(action)) {
 						clickCategoryId = Long.valueOf(String.valueOf(random.nextInt(100)));    
 						clickProductId = Long.valueOf(String.valueOf(random.nextInt(100)));  
-					} else if("order".equals(action)) {
+					} else if("Order".equals(action)) {
 						orderCategoryIds = String.valueOf(random.nextInt(100));  
 						orderProductIds = String.valueOf(random.nextInt(100));
-					} else if("pay".equals(action)) {
+					} else if("Pay".equals(action)) {
 						payCategoryIds = String.valueOf(random.nextInt(100));  
 						payProductIds = String.valueOf(random.nextInt(100));
 					}
