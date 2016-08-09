@@ -20,21 +20,23 @@ public class ParamUtils {
      * @return 任务id
      */
 
-/*    public static Long getTaskIdFromArgs(String[] args, String taskType) {
-        boolean local = ConfigurationManager.getBoolean(Constants.SPARK_LOCAL);
-        if (local) {
-            return ConfigurationManager.getLong(taskType);
+    public static Integer getTaskIdFromArgs(String[] args, String taskType) {
+//        boolean local = ConfigurationManager.getBoolean(Constants.SPARK_LOCAL);
+        ConfigurationManager cm = new ConfigurationManager();
+        String mode = cm.getProperty("spark-ctx.master");
+        if ("local".equals(mode)) {
+            return Integer.parseInt(taskType);
         } else {
             try {
                 if (args != null && args.length > 0) {
-                    return Long.valueOf(args[0]);
+                    return Integer.parseInt(args[0]);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
         return null;
-    }*/
+    }
 
     /**
      * 从JSON对象中提取参数
