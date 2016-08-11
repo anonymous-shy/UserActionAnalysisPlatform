@@ -21,7 +21,6 @@ public class ParamUtils {
      */
 
     public static Integer getTaskIdFromArgs(String[] args, String taskType) {
-//        boolean local = ConfigurationManager.getBoolean(Constants.SPARK_LOCAL);
         ConfigurationManager cm = new ConfigurationManager();
         String mode = cm.getProperty("spark-ctx.master");
         if ("local".equals(mode)) {

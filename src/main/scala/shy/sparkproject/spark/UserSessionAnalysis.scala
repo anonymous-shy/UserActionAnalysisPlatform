@@ -32,7 +32,7 @@ object UserSessionAnalysis {
     //拿到指定行为参数
     val taskDao: ITaskDao = DaoFactory.getTaskDao
     val task: Task = taskDao.findById(ParamUtils.getTaskIdFromArgs(args, ""))
-    val task_Param: JSONObject = JSON.parseObject(task.getTask_Param)
+    val taskParam: JSONObject = JSON.parseObject(task.getTask_Param)
 
     /**
       * 按照session粒度进行聚合,从user_visit_action表中,查询出指定范围的行为数据
@@ -45,8 +45,8 @@ object UserSessionAnalysis {
       */
 
     //1.从用户行为数据表(hive table)中获取指定时间范围的行为数据
-    val start_date = ParamUtils.getParam(task_Param, cm.getProperty("PARAM_START_DATE"))
-    val end_date = ParamUtils.getParam(task_Param, cm.getProperty("PARAM_END_DATE"))
+    val start_date = ParamUtils.getParam(taskParam, Constants.PARAM_START_DATE)
+    val end_date = ParamUtils.getParam(taskParam, Constants.PARAM_END_DATE)
     val user_action_sql = "select * from user_visit_action where " +
       "date >= '" + start_date + "' and " +
       "date <= '" + end_date + "'"
@@ -55,48 +55,50 @@ object UserSessionAnalysis {
 
     //2.对行为数据按照session粒度聚合
     val sessionId_acctionRdd: RDD[(String, Row)] = actionRDDByDateRange
-      .map(row => (row.getAs[String]("session_id"), row))
+      .map(row => (row.getAs[String](Constants.FIELD_SESSION_ID), row))
     val sessionId_acctionsRdd: RDD[(String, Iterable[Row])] = sessionId_acctionRdd.groupByKey
 
     //3.对聚合好数据将关键行为指标提出
-    val userId_partAggrInfoRdd: RDD[(Long, JSONObject)] = sessionId_acctionsRdd.map(f = x => {
-      val session_id: String = x._1
+    val userId_partAggrInfoRdd: RDD[(Long, Map[String, String])] = sessionId_acctionsRdd.map(x => {
+      val sessionId: String = x._1
       val iterator: Iterator[Row] = x._2.iterator
 
       val search_keyword_buffer = new ArrayBuffer[String]
       val click_category_id_buffer = new ArrayBuffer[Long]
       val click_product_id_buffer = new ArrayBuffer[Long]
-      var user_id: Long = 0
+      var userId: Long = 0
       while (iterator.hasNext) {
         val row: Row = iterator.next()
-        user_id = row.getAs[Long]("user_id")
-        val search_keyword: String = row.getAs[String]("search_keyword")
-        val click_category_id: Long = row.getAs[Long]("click_category_id")
-        val click_product_id: Long = row.getAs[Long]("click_product_id")
+        userId = row.getAs[Long]("user_id")
+        val searchKeyword: String = row.getAs[String]("search_keyword")
+        val clickCategoryId: Long = row.getAs[Long]("click_category_id")
+        val clickProductId: Long = row.getAs[Long]("click_product_id")
 
-        if (StringUtils.isNotEmpty(search_keyword))
-          if (search_keyword_buffer.contains(search_keyword))
-            search_keyword_buffer += search_keyword
+        if (StringUtils.isNotEmpty(searchKeyword))
+          if (search_keyword_buffer.contains(searchKeyword))
+            search_keyword_buffer += searchKeyword
 
-        if (click_category_id != null)
-          if (click_category_id_buffer.contains(click_category_id))
-            click_category_id_buffer += click_category_id
+        if (clickCategoryId != null)
+          if (click_category_id_buffer.contains(clickCategoryId))
+            click_category_id_buffer += clickCategoryId
 
-        if (click_product_id != null)
-          if (click_product_id_buffer.contains(click_product_id))
-            click_product_id_buffer += click_product_id
+        if (clickProductId != null)
+          if (click_product_id_buffer.contains(clickProductId))
+            click_product_id_buffer += clickProductId
       }
 
-      val search_keywords: String = search_keyword_buffer.mkString(",").toString
-      val click_category_ids: String = click_category_id_buffer.mkString(",").toString
-      val click_product_ids: String = click_product_id_buffer.mkString(",").toString
-      //使用JSON存储聚合后的拼接行为数据
-      val aggrInfo: JSONObject = new JSONObject
-      aggrInfo.put("session_id", session_id)
-      aggrInfo.put("search_keywords", search_keywords)
-      aggrInfo.put("click_category_ids", click_category_ids)
-      aggrInfo.put("click_product_ids", click_product_ids)
-      (user_id, aggrInfo)
+      val searchKeywords: String = search_keyword_buffer.mkString(",").toString
+      val clickCategoryIds: String = click_category_id_buffer.mkString(",").toString
+      val clickProductIds: String = click_product_id_buffer.mkString(",").toString
+      //指定Map存放session信息
+      var aggrInfoMap = Map[String, String]()
+
+      aggrInfoMap += (Constants.FIELD_SESSION_ID -> sessionId)
+      aggrInfoMap += (Constants.FIELD_SEARCH_KEYWORDS -> searchKeywords)
+      aggrInfoMap += (Constants.FIELD_CLICK_CATEGORY_IDS -> clickCategoryIds)
+      aggrInfoMap += (Constants.FIELD_CLICK_PRODUCT_IDS -> clickProductIds)
+
+      (userId, aggrInfoMap)
     })
 
     //4.与用户信息对接
@@ -104,24 +106,63 @@ object UserSessionAnalysis {
     val user_infoDF: DataFrame = sqlContext.sql(user_info_sql)
     val user_infoRdd: RDD[Row] = user_infoDF.rdd
     val userId_info: RDD[(Long, Row)] = user_infoRdd.map(row => (row.getAs[Long]("user_id"), row))
-    val userId_fullInfo: RDD[(Long, (JSONObject, Row))] = userId_partAggrInfoRdd.join(userId_info)
+    val userId_fullInfo: RDD[(Long, (Map[String, String], Row))] = userId_partAggrInfoRdd.join(userId_info)
 
     //5.拼接最终查询待过滤信息
-    val sessionId_fullAggrInfoRDD: RDD[(Any, JSONObject)] = userId_fullInfo.map(x => {
-      val aggrInfo: JSONObject = x._2._1
+    val sessionId_fullAggrInfoRDD: RDD[(String, Map[String, String])] = userId_fullInfo.map(x => {
+      var aggrInfoMap: Map[String, String] = x._2._1
       val row: Row = x._2._2
-      val session_id: Any = aggrInfo.get("session_id")
-      val age: Int = row.getAs[Int]("age")
+      val session_id: Option[String] = aggrInfoMap.get(Constants.FIELD_SESSION_ID)
+      val age: String = row.getAs[Int]("age").toString //Int类型 使用时不要忘记
       val professional: String = row.getAs[String]("professional")
       val city: String = row.getAs[String]("city")
       val sex: String = row.getAs[String]("sex")
 
-      aggrInfo.put("age", age)
-      aggrInfo.put("professional", professional)
-      aggrInfo.put("city", city)
-      aggrInfo.put("sex", sex)
+      aggrInfoMap += (Constants.FIELD_AGE -> age)
+      aggrInfoMap += (Constants.FIELD_PROFESSIONAL -> professional)
+      aggrInfoMap += (Constants.FIELD_CITY -> city)
+      aggrInfoMap += (Constants.FIELD_SEX -> sex)
 
-      (session_id, aggrInfo)
+      (session_id.toString, aggrInfoMap)
+    })
+
+    //6.过滤已聚合好的session数据
+
+    val paramMap =
+      Map(Constants.PARAM_START_AGE -> ParamUtils.getParam(taskParam, Constants.PARAM_START_AGE),
+        Constants.PARAM_END_AGE -> ParamUtils.getParam(taskParam, Constants.PARAM_END_AGE),
+        Constants.PARAM_PROFESSIONALS -> ParamUtils.getParam(taskParam, Constants.PARAM_PROFESSIONALS),
+        Constants.PARAM_CITIES -> ParamUtils.getParam(taskParam, Constants.PARAM_CITIES),
+        Constants.PARAM_SEX -> ParamUtils.getParam(taskParam, Constants.PARAM_SEX),
+        Constants.PARAM_SEARCH_KEYWORDS -> ParamUtils.getParam(taskParam, Constants.PARAM_SEARCH_KEYWORDS),
+        Constants.PARAM_CATEGORY_IDS -> ParamUtils.getParam(taskParam, Constants.PARAM_CATEGORY_IDS),
+        Constants.PARAM_PRODUCT_IDS -> ParamUtils.getParam(taskParam, Constants.PARAM_PRODUCT_IDS))
+
+    //过滤session数据
+    val filterSessionId_fullAggrInfoRDD: RDD[(String, Map[String, String])] = sessionId_fullAggrInfoRDD.filter(x => {
+      val aggrInfoMap: Map[String, String] = x._2
+      //按年龄范围过滤
+      if (!ValidUtils.between(aggrInfoMap, Constants.FIELD_AGE, paramMap, Constants.PARAM_START_AGE, Constants.PARAM_END_AGE))
+        false
+      //按职业就行过滤
+      else if (!ValidUtils.in(aggrInfoMap, Constants.FIELD_PROFESSIONAL, paramMap, Constants.PARAM_PROFESSIONALS))
+        false
+      //按城市过滤
+      else if (!ValidUtils.in(aggrInfoMap, Constants.FIELD_CITY, paramMap, Constants.PARAM_CITIES))
+        false
+      //按性别过滤
+      else if (!ValidUtils.equal(aggrInfoMap, Constants.FIELD_SEX, paramMap, Constants.PARAM_SEX))
+        false
+      //按搜索词过滤
+      else if (!ValidUtils.in(aggrInfoMap, Constants.FIELD_SEARCH_KEYWORDS, paramMap, Constants.PARAM_SEARCH_KEYWORDS))
+        false
+      //按点击品类过滤
+      else if (!ValidUtils.in(aggrInfoMap, Constants.FIELD_CLICK_CATEGORY_IDS, paramMap, Constants.PARAM_CATEGORY_IDS))
+        false
+      //按点击商品过滤
+      else if (!ValidUtils.in(aggrInfoMap, Constants.FIELD_CLICK_PRODUCT_IDS, paramMap, Constants.PARAM_PRODUCT_IDS))
+        false
+      else true
     })
 
   }
