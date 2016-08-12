@@ -1,14 +1,16 @@
 package shy.sparkproject.spark
 
+import java.util.Date
+
 import com.alibaba.fastjson.{JSON, JSONObject}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{Accumulator, SparkConf, SparkContext}
 import shy.sparkproject.conf.ConfigurationManager
 import shy.sparkproject.dao.ITaskDao
 import shy.sparkproject.dao.factory.DaoFactory
 import shy.sparkproject.domain.Task
-import shy.sparkproject.utils.{ParamUtils, StringUtils}
+import shy.sparkproject.utils.{DateUtils, ParamUtils, StringUtils}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -29,6 +31,11 @@ object UserSessionAnalysis {
       .setMaster(cm.getProperty("spark-ctx.master"))
     val sc = new SparkContext(conf)
     val sqlContext: SQLContext = new SQLContext(sc)
+
+    //创建
+    val sessionAggrAccumulator: Accumulator[String] =
+      sc.accumulator("", "SessionAggrAccumulator")(new SessionAggrAccumulator)
+
     //拿到指定行为参数
     val taskDao: ITaskDao = DaoFactory.getTaskDao
     val task: Task = taskDao.findById(ParamUtils.getTaskIdFromArgs(args, ""))
@@ -67,6 +74,12 @@ object UserSessionAnalysis {
       val click_category_id_buffer = new ArrayBuffer[Long]
       val click_product_id_buffer = new ArrayBuffer[Long]
       var userId: Long = 0
+
+      //在过滤session中提取session访问时长与访问步长
+      var startTime: Date = null
+      var endTime: Date = null
+      var stepLength: Long = 0
+
       while (iterator.hasNext) {
         val row: Row = iterator.next()
         userId = row.getAs[Long]("user_id")
@@ -85,11 +98,29 @@ object UserSessionAnalysis {
         if (clickProductId != null)
           if (click_product_id_buffer.contains(clickProductId))
             click_product_id_buffer += clickProductId
+
+        //获取action_time
+        val actionTime: Date = DateUtils.parseTime(row.getAs[String]("action_time"))
+        //第一次情况下，将actionTime 同时赋值给 start end
+        if (startTime == null)
+          startTime = actionTime
+        if (endTime == null)
+          endTime = actionTime
+
+        if (actionTime.before(startTime))
+          startTime = actionTime
+        if (actionTime.after(endTime))
+          endTime = actionTime
+        //每循环一次步长 +1
+        stepLength = stepLength + 1
       }
 
       val searchKeywords: String = search_keyword_buffer.mkString(",").toString
       val clickCategoryIds: String = click_category_id_buffer.mkString(",").toString
       val clickProductIds: String = click_product_id_buffer.mkString(",").toString
+
+      //计算访问时长
+      val visitLength: Long = (endTime.getTime - startTime.getTime) / 1000
       //指定Map存放session信息
       var aggrInfoMap = Map[String, String]()
 
@@ -97,6 +128,8 @@ object UserSessionAnalysis {
       aggrInfoMap += (Constants.FIELD_SEARCH_KEYWORDS -> searchKeywords)
       aggrInfoMap += (Constants.FIELD_CLICK_CATEGORY_IDS -> clickCategoryIds)
       aggrInfoMap += (Constants.FIELD_CLICK_PRODUCT_IDS -> clickProductIds)
+      aggrInfoMap += (Constants.FIELD_VISIT_LENGTH -> visitLength)
+      aggrInfoMap += (Constants.FIELD_STEP_LENGTH -> stepLength)
 
       (userId, aggrInfoMap)
     })
@@ -162,7 +195,36 @@ object UserSessionAnalysis {
       //按点击商品过滤
       else if (!ValidUtils.in(aggrInfoMap, Constants.FIELD_CLICK_PRODUCT_IDS, paramMap, Constants.PARAM_PRODUCT_IDS))
         false
-      else true
+      else {
+        //当程序进入else时就是过滤后的session数据，直接在过滤后返回时算出 过滤后session条数 以及 访问时长，步长统计
+        sessionAggrAccumulator.add(Constants.SESSION_COUNT)
+        val visitLength: Long = aggrInfoMap.get(Constants.FIELD_VISIT_LENGTH).get.toLong
+        val stepLength: Long = aggrInfoMap.get(Constants.FIELD_STEP_LENGTH).get.toLong
+        calVisitLength(visitLength)
+        calStepLength(stepLength)
+        true
+      }
+
+      def calVisitLength(visitLength: Long): Unit = visitLength match {
+        case visitLength if (visitLength >= 1 && visitLength <= 3) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_1s_3s)
+        case visitLength if (visitLength >= 4 && visitLength <= 6) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_4s_6s)
+        case visitLength if (visitLength >= 7 && visitLength <= 9) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_7s_9s)
+        case visitLength if (visitLength >= 10 && visitLength <= 30) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_10s_30s)
+        case visitLength if (visitLength >= 30 && visitLength <= 60) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_30s_60s)
+        case visitLength if (visitLength >= 60 && visitLength <= 180) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_1m_3m)
+        case visitLength if (visitLength >= 180 && visitLength <= 600) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_3m_10m)
+        case visitLength if (visitLength >= 600 && visitLength <= 1800) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_10m_30m)
+        case visitLength if (visitLength >= 1800) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_30m)
+      }
+
+      def calStepLength(stepLength: Long): Unit = stepLength match {
+        case stepLength if (stepLength >= 1 && stepLength <= 3) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_1_3)
+        case stepLength if (stepLength >= 4 && stepLength <= 6) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_4_6)
+        case stepLength if (stepLength >= 7 && stepLength <= 9) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_7_9)
+        case stepLength if (stepLength >= 10 && stepLength <= 30) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_10_30)
+        case stepLength if (stepLength >= 30 && stepLength <= 60) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_30_60)
+        case stepLength if (stepLength > 60) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_60)
+      }
     })
 
   }
