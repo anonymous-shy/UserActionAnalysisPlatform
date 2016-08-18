@@ -1,6 +1,8 @@
 package shy.sparkproject.dao.factory;
 
+import shy.sparkproject.dao.ISessionAggrDao;
 import shy.sparkproject.dao.ITaskDao;
+import shy.sparkproject.dao.impl.SessionAggrDaoImpl;
 import shy.sparkproject.dao.impl.TaskDaoImpl;
 
 /**
@@ -12,4 +14,7 @@ public class DaoFactory {
         return new TaskDaoImpl();
     }
 
+    public static ISessionAggrDao getSessionAggrDao() {
+        return new SessionAggrDaoImpl();
+    }
 }

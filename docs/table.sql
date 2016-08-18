@@ -1,22 +1,22 @@
-#第一表：session_aggr_stat表，存储第一个功能，session聚合统计的结果
-CREATE TABLE `session_aggr_stat` (
+#第一表：session_aggr_rate表，存储第一个功能，session聚合统计的结果
+CREATE TABLE `session_aggr_rate` (
   `task_id` int(11) NOT NULL,
   `session_count` int(11) DEFAULT NULL,
-  `1s_3s` double DEFAULT NULL,
-  `4s_6s` double DEFAULT NULL,
-  `7s_9s` double DEFAULT NULL,
-  `10s_30s` double DEFAULT NULL,
-  `30s_60s` double DEFAULT NULL,
-  `1m_3m` double DEFAULT NULL,
-  `3m_10m` double DEFAULT NULL,
-  `10m_30m` double DEFAULT NULL,
-  `30m` double DEFAULT NULL,
-  `1_3` double DEFAULT NULL,
-  `4_6` double DEFAULT NULL,
-  `7_9` double DEFAULT NULL,
-  `10_30` double DEFAULT NULL,
-  `30_60` double DEFAULT NULL,
-  `60` double DEFAULT NULL,
+  `visit_length_1s_3s_rate` double DEFAULT NULL,
+  `visit_length_4s_6s_rate` double DEFAULT NULL,
+  `visit_length_7s_9s_rate` double DEFAULT NULL,
+  `visit_length_10s_30s_rate` double DEFAULT NULL,
+  `visit_length_30s_60s_rate` double DEFAULT NULL,
+  `visit_length_1m_3m_rate` double DEFAULT NULL,
+  `visit_length_3m_10m_rate` double DEFAULT NULL,
+  `visit_length_10m_30m_rate` double DEFAULT NULL,
+  `visit_length_30m_rate` double DEFAULT NULL,
+  `step_length_1_3_rate` double DEFAULT NULL,
+  `step_length_4_6_rate` double DEFAULT NULL,
+  `step_length_7_9_rate` double DEFAULT NULL,
+  `step_length_10_30_rate` double DEFAULT NULL,
+  `step_length_30_60_rate` double DEFAULT NULL,
+  `step_length_60_rate` double DEFAULT NULL,
   PRIMARY KEY (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

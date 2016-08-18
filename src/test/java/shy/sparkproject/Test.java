@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import shy.sparkproject.conf.ConfigurationManager;
 import shy.sparkproject.dao.factory.DaoFactory;
+import shy.sparkproject.domain.SessionAggrRate;
 import shy.sparkproject.domain.Task;
 
 import java.sql.SQLException;
@@ -30,9 +31,6 @@ public class Test {
 
     @org.junit.Test
     public void testDao() throws SQLException {
-        Task task = DaoFactory.getTaskDao().findById(1);
-
-        System.out.print(task);
     }
 
 }

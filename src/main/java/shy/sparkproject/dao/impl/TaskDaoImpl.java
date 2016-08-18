@@ -11,7 +11,6 @@ import java.sql.SQLException;
  */
 public class TaskDaoImpl extends JDBCDAOImpl<Task> implements ITaskDao {
 
-
     @Override
     public Task findById(Integer taskId) {
         String sql = "SELECT * FROM uaap.`task` WHERE task_id = ?";

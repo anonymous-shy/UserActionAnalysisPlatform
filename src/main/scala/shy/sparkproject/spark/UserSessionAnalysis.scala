@@ -9,8 +9,8 @@ import org.apache.spark.{Accumulator, SparkConf, SparkContext}
 import shy.sparkproject.conf.ConfigurationManager
 import shy.sparkproject.dao.ITaskDao
 import shy.sparkproject.dao.factory.DaoFactory
-import shy.sparkproject.domain.Task
-import shy.sparkproject.utils.{DateUtils, ParamUtils, StringUtils}
+import shy.sparkproject.domain.{SessionAggrRate, Task}
+import shy.sparkproject.utils.{DateUtils, NumberUtils, ParamUtils, StringUtils}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -128,8 +128,8 @@ object UserSessionAnalysis {
       aggrInfoMap += (Constants.FIELD_SEARCH_KEYWORDS -> searchKeywords)
       aggrInfoMap += (Constants.FIELD_CLICK_CATEGORY_IDS -> clickCategoryIds)
       aggrInfoMap += (Constants.FIELD_CLICK_PRODUCT_IDS -> clickProductIds)
-      aggrInfoMap += (Constants.FIELD_VISIT_LENGTH -> visitLength)
-      aggrInfoMap += (Constants.FIELD_STEP_LENGTH -> stepLength)
+      aggrInfoMap += (Constants.FIELD_VISIT_LENGTH -> visitLength.toString)
+      aggrInfoMap += (Constants.FIELD_STEP_LENGTH -> stepLength.toString)
 
       (userId, aggrInfoMap)
     })
@@ -200,32 +200,61 @@ object UserSessionAnalysis {
         sessionAggrAccumulator.add(Constants.SESSION_COUNT)
         val visitLength: Long = aggrInfoMap.get(Constants.FIELD_VISIT_LENGTH).get.toLong
         val stepLength: Long = aggrInfoMap.get(Constants.FIELD_STEP_LENGTH).get.toLong
+
+        def calVisitLength(visitLength: Long): Unit = {
+          if (visitLength >= 1 && visitLength <= 3) sessionAggrAccumulator.add(Constants.TIME_PERIOD_1s_3s)
+          if (visitLength >= 4 && visitLength <= 6) sessionAggrAccumulator.add(Constants.TIME_PERIOD_4s_6s)
+          if (visitLength >= 7 && visitLength <= 9) sessionAggrAccumulator.add(Constants.TIME_PERIOD_7s_9s)
+          if (visitLength >= 10 && visitLength <= 30) sessionAggrAccumulator.add(Constants.TIME_PERIOD_10s_30s)
+          if (visitLength >= 30 && visitLength <= 60) sessionAggrAccumulator.add(Constants.TIME_PERIOD_30s_60s)
+          if (visitLength >= 60 && visitLength <= 180) sessionAggrAccumulator.add(Constants.TIME_PERIOD_1m_3m)
+          if (visitLength >= 180 && visitLength <= 600) sessionAggrAccumulator.add(Constants.TIME_PERIOD_3m_10m)
+          if (visitLength >= 600 && visitLength <= 1800) sessionAggrAccumulator.add(Constants.TIME_PERIOD_10m_30m)
+          if (visitLength >= 1800) sessionAggrAccumulator.add(Constants.TIME_PERIOD_30m)
+        }
+
+        def calStepLength(stepLength: Long): Unit = {
+          if (stepLength >= 1 && stepLength <= 3) sessionAggrAccumulator.add(Constants.STEP_PERIOD_1_3)
+          if (stepLength >= 4 && stepLength <= 6) sessionAggrAccumulator.add(Constants.STEP_PERIOD_4_6)
+          if (stepLength >= 7 && stepLength <= 9) sessionAggrAccumulator.add(Constants.STEP_PERIOD_7_9)
+          if (stepLength >= 10 && stepLength <= 30) sessionAggrAccumulator.add(Constants.STEP_PERIOD_10_30)
+          if (stepLength >= 30 && stepLength <= 60) sessionAggrAccumulator.add(Constants.STEP_PERIOD_30_60)
+          if (stepLength > 60) sessionAggrAccumulator.add(Constants.STEP_PERIOD_60)
+        }
+
         calVisitLength(visitLength)
         calStepLength(stepLength)
         true
       }
-
-      def calVisitLength(visitLength: Long): Unit = visitLength match {
-        case visitLength if (visitLength >= 1 && visitLength <= 3) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_1s_3s)
-        case visitLength if (visitLength >= 4 && visitLength <= 6) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_4s_6s)
-        case visitLength if (visitLength >= 7 && visitLength <= 9) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_7s_9s)
-        case visitLength if (visitLength >= 10 && visitLength <= 30) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_10s_30s)
-        case visitLength if (visitLength >= 30 && visitLength <= 60) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_30s_60s)
-        case visitLength if (visitLength >= 60 && visitLength <= 180) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_1m_3m)
-        case visitLength if (visitLength >= 180 && visitLength <= 600) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_3m_10m)
-        case visitLength if (visitLength >= 600 && visitLength <= 1800) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_10m_30m)
-        case visitLength if (visitLength >= 1800) => sessionAggrAccumulator.add(Constants.TIME_PERIOD_30m)
-      }
-
-      def calStepLength(stepLength: Long): Unit = stepLength match {
-        case stepLength if (stepLength >= 1 && stepLength <= 3) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_1_3)
-        case stepLength if (stepLength >= 4 && stepLength <= 6) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_4_6)
-        case stepLength if (stepLength >= 7 && stepLength <= 9) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_7_9)
-        case stepLength if (stepLength >= 10 && stepLength <= 30) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_10_30)
-        case stepLength if (stepLength >= 30 && stepLength <= 60) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_30_60)
-        case stepLength if (stepLength > 60) => sessionAggrAccumulator.add(Constants.STEP_PERIOD_60)
-      }
     })
 
+    /**
+      * NOTE:在Accumulator.value前，必须要有action，
+      * 不然程序不会执行，Accumulator不会进行累加,供下面程序使用！！！
+      */
+    println(filterSessionId_fullAggrInfoRDD.take(10))
+
+    //计算各个范围的session占比，写入mysql供前台查询
+    val value: String = sessionAggrAccumulator.value
+    //拿到session总数
+    val sessionCount: Long = StringUtils.getFieldFromConcatString(value, "|", Constants.SESSION_COUNT).toLong
+    val sessionAggrRate = new SessionAggrRate(task.getTask_Id, sessionCount,
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_1s_3s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_4s_6s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_7s_9s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_10s_30s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_30s_60s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_1m_3m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_3m_10m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_10m_30m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_30m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_1_3).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_4_6).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_7_9).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_10_30).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_30_60).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_60).toLong / sessionCount).toDouble, 2)
+    )
+    DaoFactory.getSessionAggrDao.insert(sessionAggrRate)
   }
 }
