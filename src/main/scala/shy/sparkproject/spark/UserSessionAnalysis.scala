@@ -42,7 +42,7 @@ object UserSessionAnalysis {
     val taskParam: JSONObject = JSON.parseObject(task.getTask_Param)
 
     /**
-      * 按照session粒度进行聚合,从user_visit_action表中,查询出指定范围的行为数据
+      * 模块1：按照session粒度进行聚合,从user_visit_action表中,查询出指定范围的行为数据
       * 1,时间范围过滤：起始时间-结束时间
       * 2,性别
       * 3,年龄范围
@@ -229,11 +229,41 @@ object UserSessionAnalysis {
     })
 
     /**
+      * 模块3：随机抽取session
+      * 对以聚合好的数据进行按小时比例随机抽取
+      */
+    //将聚合后数据转为<yyyy-MM-dd_HH,sessionid>后按key进行count,拿到每天每小时的session count.
+    val countMap = filterSessionId_fullAggrInfoRDD.map(x => {
+      //step 1 : 将rdd转为<yyyy-MM-dd_HH,sessionid>格式
+      val aggrInfoMap: Map[String, String] = x._2
+      val startTime: String = aggrInfoMap.get(Constants.FIELD_START_TIME).get
+      (DateUtils.getDateHour(startTime), aggrInfoMap)
+    }).countByKey
+    //step 2 : 按时间比例随机抽取，计算出每天每小时要抽取出的session的索引
+    var dateHourCountMap = Map[String, Map[String, Long]]()
+    for (dateHour <- countMap.keys) {
+      val date: String = dateHour.split("_")(0)
+      val hour: String = dateHour.split("_")(1)
+      val count: Long = countMap.get(dateHour).get
+      var hourCountMap: Map[String, Long] = dateHourCountMap.get(date).get
+      if (hourCountMap == null) {
+        hourCountMap = Map[String, Long]()
+      }
+      hourCountMap += (hour -> count)
+      dateHourCountMap += (date -> hourCountMap)
+    }
+
+    
+    /**
       * NOTE:在Accumulator.value前，必须要有action，
       * 不然程序不会执行，Accumulator不会进行累加,供下面程序使用！！！
       */
     println(filterSessionId_fullAggrInfoRDD.take(10))
 
+    /**
+      * 模块2：按范围统计session占比
+      * 对已聚合好的数据进行按访问时长，步长比例统计
+      */
     //计算各个范围的session占比，写入mysql供前台查询
     val value: String = sessionAggrAccumulator.value
     //拿到session总数

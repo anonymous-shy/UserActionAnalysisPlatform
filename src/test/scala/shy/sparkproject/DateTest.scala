@@ -7,6 +7,14 @@ import java.util.Date
   */
 object DateTest extends App {
 
-  private val date: Date = new Date
-  println(date.getTime)
+  //  private val date: Date = new Date
+  //  println(date.getTime)
+
+  var map1 = Map[String, Map[String, Long]]()
+  var map2 = Map[String, Long]()
+
+  map2 += ("AA" -> 123)
+  map1 += ("A" -> map2)
+  println(map2)
+  println(map1)
 }
