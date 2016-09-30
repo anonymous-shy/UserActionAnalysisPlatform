@@ -12,6 +12,7 @@ import shy.sparkproject.dao.factory.DaoFactory
 import shy.sparkproject.domain.{SessionAggrRate, Task}
 import shy.sparkproject.utils.{DateUtils, NumberUtils, ParamUtils, StringUtils}
 
+import scala.collection.immutable.StringOps
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -227,33 +228,43 @@ object UserSessionAnalysis {
         true
       }
     })
-
+    //全天session数据量
+    val sessionSize: Long = filterSessionId_fullAggrInfoRDD.count
     /**
       * 模块3：随机抽取session
       * 对以聚合好的数据进行按小时比例随机抽取
       */
     //将聚合后数据转为<yyyy-MM-dd_HH,sessionid>后按key进行count,拿到每天每小时的session count.
-    val countMap = filterSessionId_fullAggrInfoRDD.map(x => {
+    val time2Info: RDD[(String, Map[String, String])] = filterSessionId_fullAggrInfoRDD.map(x => {
       //step 1 : 将rdd转为<yyyy-MM-dd_HH,sessionid>格式
       val aggrInfoMap: Map[String, String] = x._2
       val startTime: String = aggrInfoMap.get(Constants.FIELD_START_TIME).get
       (DateUtils.getDateHour(startTime), aggrInfoMap)
-    }).countByKey
-    //step 2 : 按时间比例随机抽取，计算出每天每小时要抽取出的session的索引
+    })
+    val countMap = time2Info.countByKey
+    //step 2 : 按时间比例随机抽取，计算出每天每小时要抽取出的session
     var dateHourCountMap = Map[String, Map[String, Long]]()
     for (dateHour <- countMap.keys) {
       val date: String = dateHour.split("_")(0)
       val hour: String = dateHour.split("_")(1)
+      //每小时访问数
       val count: Long = countMap.get(dateHour).get
+      //每小时提取数目
+      val hourExtractNumber: Long = (count / sessionSize) * 100
+
       var hourCountMap: Map[String, Long] = dateHourCountMap.get(date).get
       if (hourCountMap == null) {
         hourCountMap = Map[String, Long]()
       }
-      hourCountMap += (hour -> count)
+      //hourCountMap (小时 -> 提取数目)
+      hourCountMap += (hour -> hourExtractNumber)
       dateHourCountMap += (date -> hourCountMap)
     }
+    //step 3 : 遍历每小时的session，sample提取相应条数
+    val time2Infos: RDD[(String, Iterable[Map[String, String]])] = time2Info.groupByKey
+//    time2Infos.takeSample(false, 100)
 
-    
+
     /**
       * NOTE:在Accumulator.value前，必须要有action，
       * 不然程序不会执行，Accumulator不会进行累加,供下面程序使用！！！
