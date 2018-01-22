@@ -1,0 +1,6 @@
+使用Hive作为数据仓库存储落地数据
+1,user_visit_action (UV表,存放点击流数据，每一次点击对应表中一条数据)
+date: timestamp
+user_id:
+session_id:
+page_id:
