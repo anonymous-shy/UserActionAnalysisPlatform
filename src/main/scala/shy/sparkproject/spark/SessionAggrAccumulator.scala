@@ -8,6 +8,11 @@ import shy.sparkproject.utils.StringUtils
   */
 class SessionAggrAccumulator extends AccumulatorParam[String] {
 
+  /**
+    * 用于数据初始化
+    * @param initialValue 初始值
+    * @return
+    */
   override def zero(initialValue: String): String = Constants.SESSION_COUNT + "=0|" +
     Constants.TIME_PERIOD_1s_3s + "=0|" +
     Constants.TIME_PERIOD_4s_6s + "=0|" +
@@ -25,6 +30,12 @@ class SessionAggrAccumulator extends AccumulatorParam[String] {
     Constants.STEP_PERIOD_30_60 + "=0|" +
     Constants.STEP_PERIOD_60 + "=0"
 
+  /**
+    *
+    * @param r1 初始化字符串
+    * @param r2 累加字符串
+    * @return
+    */
   override def addInPlace(r1: String, r2: String): String = {
     if (r1 == "")
       r2
@@ -32,6 +43,7 @@ class SessionAggrAccumulator extends AccumulatorParam[String] {
       val oldValue: String = StringUtils.getFieldFromConcatString(r1, "|", r2)
       val newValue: Long = oldValue.toLong + 1
       StringUtils.setFieldInConcatString(r1, "|", r2, newValue.toString)
+      r1
     }
   }
 }
