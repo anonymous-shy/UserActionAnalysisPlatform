@@ -9,10 +9,10 @@ object ValidUtils {
     if (paramMap.get(startParamField).isEmpty || paramMap.get(endParamField).isEmpty)
       true
     else {
-      val start: Int = paramMap.get(startParamField).get.toInt
-      val end: Int = paramMap.get(endParamField).get.toInt
+      val start: Int = paramMap(startParamField).toInt
+      val end: Int = paramMap(endParamField).toInt
       if (dataMap.get(dateField).isDefined) {
-        val data: Int = dataMap.get(dateField).get.toInt
+        val data: Int = dataMap(dateField).toInt
         if (data >= start && data <= end)
           true
         else false
@@ -24,9 +24,9 @@ object ValidUtils {
     if (paramMap.get(paramField).isEmpty)
       true
     else {
-      val params: Seq[String] = paramMap.get(paramField).get.split(",").toSeq
+      val params: Seq[String] = paramMap(paramField).split(",").toSeq
       if (dataMap.get(dataField).isDefined) {
-        val datas: Seq[String] = dataMap.get(dataField).get.split(",").toSeq
+        val datas: Seq[String] = dataMap(dataField).split(",").toSeq
         params.containsSlice(datas)
       } else false
     }
@@ -36,9 +36,9 @@ object ValidUtils {
     if (paramMap.get(paramField).isEmpty)
       true
     else {
-      val param: String = paramMap.get(paramField).get
+      val param: String = paramMap(paramField)
       if (dataMap.get(dataField).isDefined) {
-        val data: String = dataMap.get(dataField).get
+        val data: String = dataMap(dataField)
         param.equalsIgnoreCase(data)
       } else false
     }

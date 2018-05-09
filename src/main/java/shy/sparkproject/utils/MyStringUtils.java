@@ -5,7 +5,7 @@ package shy.sparkproject.utils;
  * @author Administrator
  *
  */
-public class StringUtils {
+public class MyStringUtils {
 
 	/**
 	 * 判断字符串是否为空

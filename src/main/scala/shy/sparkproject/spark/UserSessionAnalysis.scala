@@ -3,6 +3,7 @@ package shy.sparkproject.spark
 import java.util.Date
 
 import com.alibaba.fastjson.{JSON, JSONObject}
+import org.apache.commons.lang3.StringUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{Accumulator, SparkConf, SparkContext}
@@ -10,14 +11,15 @@ import shy.sparkproject.conf.ConfigurationManager
 import shy.sparkproject.dao.ITaskDao
 import shy.sparkproject.dao.factory.DaoFactory
 import shy.sparkproject.domain.{SessionAggrRate, Task}
-import shy.sparkproject.utils.{DateUtils, NumberUtils, ParamUtils, StringUtils}
+import shy.sparkproject.utils.{DateUtils, MyStringUtils, NumberUtils, ParamUtils}
 
-import scala.collection.immutable.StringOps
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{Map => MMap}
+
 
 /**
   * 用户访问session分析
-  * Spark作业接收用户创建的任务，J2EE品台接收到用户创建的任务后，将记录插入task表中，
+  * Spark作业接收用户创建的任务，J2EE后台接收到用户创建的任务后，将记录插入task表中，
   * 参数以JSON格式封装在task_param字段中，接着J2EE调用Spark-submit shell脚本启动作业
   * 参数task_id，task_param会传递进spark main中
   * Created by AnonYmous_shY on 2016/8/8.
@@ -55,9 +57,12 @@ object UserSessionAnalysis {
     //1.从用户行为数据表(hive table)中获取指定时间范围的行为数据
     val start_date = ParamUtils.getParam(taskParam, Constants.PARAM_START_DATE)
     val end_date = ParamUtils.getParam(taskParam, Constants.PARAM_END_DATE)
-    val user_action_sql = "select * from user_visit_action where " +
-      "date >= '" + start_date + "' and " +
-      "date <= '" + end_date + "'"
+    val user_action_sql =
+      s"""
+         |SELECT * FROM
+         | user_visit_action
+         |WHERE date >= $start_date AND date < $end_date
+       """.stripMargin
     val actionDF: DataFrame = sqlContext.sql(user_action_sql)
     val actionRDDByDateRange: RDD[Row] = actionDF.rdd
 
@@ -88,7 +93,7 @@ object UserSessionAnalysis {
         val clickCategoryId: Long = row.getAs[Long]("click_category_id")
         val clickProductId: Long = row.getAs[Long]("click_product_id")
 
-        if (StringUtils.isNotEmpty(searchKeyword))
+        if (MyStringUtils.isNotEmpty(searchKeyword))
           if (search_keyword_buffer.contains(searchKeyword))
             search_keyword_buffer += searchKeyword
 
@@ -199,8 +204,8 @@ object UserSessionAnalysis {
       else {
         //当程序进入else时就是过滤后的session数据，直接在过滤后返回时算出 过滤后session条数 以及 访问时长，步长统计
         sessionAggrAccumulator.add(Constants.SESSION_COUNT)
-        val visitLength: Long = aggrInfoMap.get(Constants.FIELD_VISIT_LENGTH).get.toLong
-        val stepLength: Long = aggrInfoMap.get(Constants.FIELD_STEP_LENGTH).get.toLong
+        val visitLength: Long = aggrInfoMap(Constants.FIELD_VISIT_LENGTH).toLong
+        val stepLength: Long = aggrInfoMap(Constants.FIELD_STEP_LENGTH).toLong
 
         def calVisitLength(visitLength: Long): Unit = {
           if (visitLength >= 1 && visitLength <= 3) sessionAggrAccumulator.add(Constants.TIME_PERIOD_1s_3s)
@@ -238,7 +243,7 @@ object UserSessionAnalysis {
     val time2Info: RDD[(String, Map[String, String])] = filterSessionId_fullAggrInfoRDD.map(x => {
       //step 1 : 将rdd转为<yyyy-MM-dd_HH,sessionid>格式
       val aggrInfoMap: Map[String, String] = x._2
-      val startTime: String = aggrInfoMap.get(Constants.FIELD_START_TIME).get
+      val startTime: String = aggrInfoMap(Constants.FIELD_START_TIME)
       (DateUtils.getDateHour(startTime), aggrInfoMap)
     })
     val countMap = time2Info.countByKey
@@ -248,11 +253,11 @@ object UserSessionAnalysis {
       val date: String = dateHour.split("_")(0)
       val hour: String = dateHour.split("_")(1)
       //每小时访问数
-      val count: Long = countMap.get(dateHour).get
+      val count: Long = countMap(dateHour)
       //每小时提取数目
       val hourExtractNumber: Long = (count / sessionSize) * 100
 
-      var hourCountMap: Map[String, Long] = dateHourCountMap.get(date).get
+      var hourCountMap: Map[String, Long] = dateHourCountMap(date)
       if (hourCountMap == null) {
         hourCountMap = Map[String, Long]()
       }
@@ -262,7 +267,7 @@ object UserSessionAnalysis {
     }
     //step 3 : 遍历每小时的session，sample提取相应条数
     val time2Infos: RDD[(String, Iterable[Map[String, String]])] = time2Info.groupByKey
-//    time2Infos.takeSample(false, 100)
+    //    time2Infos.takeSample(false, 100)
 
 
     /**
@@ -278,24 +283,25 @@ object UserSessionAnalysis {
     //计算各个范围的session占比，写入mysql供前台查询
     val value: String = sessionAggrAccumulator.value
     //拿到session总数
-    val sessionCount: Long = StringUtils.getFieldFromConcatString(value, "|", Constants.SESSION_COUNT).toLong
+    val sessionCount: Long = MyStringUtils.getFieldFromConcatString(value, "|", Constants.SESSION_COUNT).toLong
     val sessionAggrRate = new SessionAggrRate(task.getTask_Id, sessionCount,
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_1s_3s).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_4s_6s).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_7s_9s).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_10s_30s).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_30s_60s).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_1m_3m).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_3m_10m).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_10m_30m).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_30m).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_1_3).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_4_6).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_7_9).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_10_30).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_30_60).toLong / sessionCount).toDouble, 2),
-      NumberUtils.formatDouble((StringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_60).toLong / sessionCount).toDouble, 2)
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_1s_3s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_4s_6s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_7s_9s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_10s_30s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_30s_60s).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_1m_3m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_3m_10m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_10m_30m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.TIME_PERIOD_30m).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_1_3).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_4_6).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_7_9).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_10_30).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_30_60).toLong / sessionCount).toDouble, 2),
+      NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_60).toLong / sessionCount).toDouble, 2)
     )
     DaoFactory.getSessionAggrDao.insert(sessionAggrRate)
   }
+
 }

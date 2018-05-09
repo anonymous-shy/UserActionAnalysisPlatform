@@ -1,7 +1,7 @@
 package shy.sparkproject.spark
 
 import org.apache.spark.AccumulatorParam
-import shy.sparkproject.utils.StringUtils
+import shy.sparkproject.utils.MyStringUtils
 
 /**
   * Created by AnonYmous_shY on 2016/8/12.
@@ -10,6 +10,9 @@ class SessionAggrAccumulator extends AccumulatorParam[String] {
 
   /**
     * 用于数据初始化
+    * 返回一个值，初始化中，所有范围区间的数量都是 0，
+    * 各个范围的统计数量的拼接，采用key=value|key=value连接串的格式
+    *
     * @param initialValue 初始值
     * @return
     */
@@ -31,6 +34,8 @@ class SessionAggrAccumulator extends AccumulatorParam[String] {
     Constants.STEP_PERIOD_60 + "=0"
 
   /**
+    * r1初始化字符串，r2为遍历session时，判断某个session对应的区间，
+    * 在r1中找到r2对应的value，累加1，更新到r1字符串中
     *
     * @param r1 初始化字符串
     * @param r2 累加字符串
@@ -40,10 +45,10 @@ class SessionAggrAccumulator extends AccumulatorParam[String] {
     if (r1 == "")
       r2
     else {
-      val oldValue: String = StringUtils.getFieldFromConcatString(r1, "|", r2)
+      val oldValue: String = MyStringUtils.getFieldFromConcatString(r1, "|", r2)
       val newValue: Long = oldValue.toLong + 1
-      StringUtils.setFieldInConcatString(r1, "|", r2, newValue.toString)
-      r1
+      val newR1 = MyStringUtils.setFieldInConcatString(r1, "|", r2, newValue.toString)
+      newR1
     }
   }
 }

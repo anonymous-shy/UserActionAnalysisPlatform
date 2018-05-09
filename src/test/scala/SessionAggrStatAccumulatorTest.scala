@@ -1,3 +1,4 @@
+/*
 import org.apache.spark.AccumulatorParam
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
@@ -57,3 +58,4 @@ object SessionAggrStatAccumulatorTest {
     println(sessionAggrStatAccumulator.value)
   }
 }
+*/
