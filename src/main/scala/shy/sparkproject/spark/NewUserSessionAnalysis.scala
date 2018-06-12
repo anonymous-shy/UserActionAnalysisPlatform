@@ -39,8 +39,11 @@ object NewUserSessionAnalysis {
     val actionRDDByDateRange: RDD[Row] = getActionRddByDateRange(sqlContext, taskParam)
     val sessionFullAggrInfoRDD: RDD[(String, Map[String, String])] = aggrBySession(actionRDDByDateRange, sqlContext)
     val filteredSessionRDD: RDD[(String, Map[String, String])] = filterSession(sessionFullAggrInfoRDD, taskParam, sessionAggrAccumulator)
-    filteredSessionRDD.take(10) // 触发action
+    //    filteredSessionRDD.take(10) // 触发action
+    // 将统计指标插入MySQL
     sessionStatistics(sessionAggrAccumulator, taskId)
+
+
   }
 
   // 1.从用户行为数据表(hive table)中获取指定时间范围的行为数据
@@ -112,6 +115,7 @@ object NewUserSessionAnalysis {
       aggrInfoMap(Constants.FIELD_CLICK_PRODUCT_IDS) = click_product_id_buffer.mkString(",")
       aggrInfoMap(Constants.FIELD_VISIT_LENGTH) = visitLength.toString
       aggrInfoMap(Constants.FIELD_STEP_LENGTH) = stepLength.toString
+      aggrInfoMap(Constants.FIELD_START_TIME) = DateUtils.formatDate(startTime)
       (userId, aggrInfoMap.toMap)
     })
     // 提取用户信息
@@ -197,7 +201,25 @@ object NewUserSessionAnalysis {
     }
   }
 
-  // 4.对已聚合好的数据进行按访问时长，步长比例统计
+  // 5.session随机抽取 TODO
+  def randomExtractSession(sessionFullAggrInfoRDD: RDD[(String, Map[String, String])]) = {
+    // 得到对应每小时对应的session条数 <>
+    val sessionCntsPerHour = sessionFullAggrInfoRDD.map(x => {
+      val startTime = x._2(Constants.FIELD_START_TIME)
+      val startHour = DateUtils.getDateHour(startTime)
+      (startHour, x._2)
+    }).countByKey()
+    // 将<yyyy-MM-dd_HH,count>转成<yyyy-MM-dd,<HH,count>>
+    val dateHourCountMap = MMap[String, Map[String, Long]]()
+    sessionCntsPerHour.foreach(m => {
+      val dateHour = m._1.split("_")
+      val date = dateHour(0)
+      val hour = dateHour(1)
+      dateHourCountMap += (date -> Map[String, Long](hour, m._2))
+    })
+  }
+
+  // 4.对已聚合好的数据进行按访问时长，步长比例统计,结果统计插入MySQL
   def sessionStatistics(sessionAggrAccumulator: Accumulator[String], taskId: Int): Unit = {
     val value = sessionAggrAccumulator.value
     //拿到session总数
@@ -220,5 +242,10 @@ object NewUserSessionAnalysis {
       NumberUtils.formatDouble((MyStringUtils.getFieldFromConcatString(value, "|", Constants.STEP_PERIOD_60).toLong / sessionCount).toDouble, 2)
     )
     DaoFactory.getSessionAggrDao.insert(sessionAggrRate)
+  }
+
+  // 6.获取Top10热门品类
+  def getTop10Category(sessionFullAggrInfoRDD: RDD[(String, Map[String, String])]) = {
+
   }
 }
